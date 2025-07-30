@@ -74,7 +74,11 @@ struct LmsrMarketRow<T: EnumCount + IntoEnumIterator + Copy> {
 
 impl<T: EnumCount + IntoEnumIterator + Copy> sqlx::FromRow<'_, SqliteRow> for LmsrMarketRow<T> {
     fn from_row(row: &SqliteRow) -> Result<Self, sqlx::Error> {
-        todo!()
+        Ok(Self {
+            market: todo!(),
+            title: todo!(),
+            description: todo!(),
+        })
     }
 }
 
@@ -99,7 +103,7 @@ async fn main() {
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![commands::ping(), commands::points()],
+            commands: vec![commands::help(), commands::points(), commands::new_market()],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("!".into()),
                 ..Default::default()

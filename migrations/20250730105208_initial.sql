@@ -4,15 +4,15 @@ CREATE TABLE lmsr_market (
     liquidity REAL NOT NULL,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
     resolved_idx INTEGER,
-    market_volume REAL NOT NULL,
-    title TEXT NOT NULL,
+    market_volume REAL NOT NULL DEFAULT 0,
+    title TEXT NOT NULL UNIQUE,
     description TEXT
 );
 
 CREATE TABLE shares (
     market_id INTEGER NOT NULL,
     idx INTEGER NOT NULL,
-    amount INTEGER NOT NULL,
+    amount INTEGER NOT NULL DEFAULT 0,
     description TEXT NOT NULL,
     PRIMARY KEY(market_id, idx),
     FOREIGN KEY(market_id) REFERENCES lmsr_market(id) ON DELETE CASCADE
