@@ -1,5 +1,5 @@
 -- Add migration script here
-CREATE TABLE lmsr_market (
+CREATE TABLE lmsr_markets (
     id INTEGER PRIMARY KEY,
     liquidity REAL NOT NULL,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE,

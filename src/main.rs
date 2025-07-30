@@ -66,20 +66,33 @@ pub(crate) struct User {
     username: String,
 }
 
-struct LmsrMarketRow<T: EnumCount + IntoEnumIterator + Copy> {
+pub(crate) struct FullLmsrMarket<T: EnumCount + IntoEnumIterator + Copy> {
     market: LmsrMarket<T>,
     title: String,
     description: String,
 }
 
-impl<T: EnumCount + IntoEnumIterator + Copy> sqlx::FromRow<'_, SqliteRow> for LmsrMarketRow<T> {
-    fn from_row(row: &SqliteRow) -> Result<Self, sqlx::Error> {
-        Ok(Self {
-            market: todo!(),
-            title: todo!(),
-            description: todo!(),
-        })
-    }
+#[derive(sqlx::FromRow, Debug)]
+struct Market {
+    id: i64,
+    liquidity: f64,
+    is_resolved: bool,
+    resolved_idx: Option<i64>,
+    market_volume: f64,
+    title: String,
+    description: String,
+}
+
+pub(crate) async fn get_market<T: EnumCount + IntoEnumIterator + Copy>(
+    pool: &SqlitePool,
+    market_id: i64,
+) -> Option<FullLmsrMarket<T>> {
+    let result: Option<Market> = sqlx::query_as("SELECT * FROM lmsr_markets WHERE id = ?")
+        .bind(market_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+    None
 }
 
 #[tokio::main]

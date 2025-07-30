@@ -52,7 +52,7 @@ pub enum BinaryOutcome {
 #[poise::command(slash_command, prefix_command)]
 pub async fn new_market(ctx: Context<'_>, title: String, description: String) -> Result<(), Error> {
     let result =
-        sqlx::query("INSERT INTO lmsr_market (liquidity, title, description) VALUES (?, ?, ?)")
+        sqlx::query("INSERT INTO lmsr_markets (liquidity, title, description) VALUES (?, ?, ?)")
             .bind(DEFAULT_LIQUIDITY)
             .bind(title)
             .bind(description)
