@@ -1,6 +1,8 @@
 mod commands;
 use poise::serenity_prelude::{self as serenity, EventHandler, async_trait};
-use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
+use prediction_market::LmsrMarket;
+use sqlx::{sqlite::{SqlitePoolOptions, SqliteRow}, SqlitePool};
+use strum::{EnumCount, IntoEnumIterator};
 
 // User data, which is stored and accessible in all command invocations
 struct Data {
@@ -15,6 +17,19 @@ struct Handler;
 #[async_trait]
 impl EventHandler for Handler {}
 
+
+struct LmsrMarketRow<T: EnumCount + IntoEnumIterator + Copy> {
+    market: LmsrMarket<T>,
+    title: String,
+    description: String,
+}
+
+impl<T: EnumCount + IntoEnumIterator + Copy> sqlx::FromRow<'_, SqliteRow> for LmsrMarketRow<T> {
+    fn from_row(row: &SqliteRow) -> Result<Self, sqlx::Error> {
+        todo!()
+    }
+}
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().expect(".env file not found");
@@ -25,6 +40,8 @@ async fn main() {
         .connect("sqlite::memory:")
         .await
         .expect("could not connect to database");
+
+    sqlx::migrate!().run(&pool).await.expect("migrations failed");
 
     let intents =
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
