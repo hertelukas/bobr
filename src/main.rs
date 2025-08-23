@@ -1,10 +1,7 @@
 mod commands;
 use poise::serenity_prelude::{self as serenity, EventHandler, Message, async_trait};
-use prediction_market::LmsrMarket;
-use sqlx::{
-    SqlitePool,
-    sqlite::{SqlitePoolOptions, SqliteRow},
-};
+use prediction_market::{LmsrMarket, LmsrMarketDTO};
+use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 use strum::{EnumCount, IntoEnumIterator};
 
 // User data, which is stored and accessible in all command invocations
@@ -19,7 +16,7 @@ struct Handler {
     pool: SqlitePool,
 }
 
-const INITIAL_POINTS: f64 = 1000.0;
+const INITIAL_POINTS: f64 = 10.0;
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -40,8 +37,8 @@ impl EventHandler for Handler {
             .unwrap();
 
         if user.is_some() {
-            // User exists: increment points by 1
-            sqlx::query("UPDATE users SET points = points + 1 WHERE id = ?")
+            // User exists: increment points by 0.01
+            sqlx::query("UPDATE users SET points = points + 0.01 WHERE id = ?")
                 .bind(user_id)
                 .execute(&mut *conn)
                 .await
@@ -66,14 +63,22 @@ pub(crate) struct User {
     username: String,
 }
 
-pub(crate) struct FullLmsrMarket<T: EnumCount + IntoEnumIterator + Copy> {
+#[derive(sqlx::FromRow)]
+pub(crate) struct UserOwns {
+    user_id: i64,
+    market_id: i64,
+    share_idx: i64,
+    amount: i64,
+}
+
+pub(crate) struct FullLmsrMarket<T: EnumCount + IntoEnumIterator + Copy + Eq> {
     market: LmsrMarket<T>,
     title: String,
     description: String,
 }
 
 #[derive(sqlx::FromRow, Debug)]
-struct Market {
+struct MarketRow {
     id: i64,
     liquidity: f64,
     is_resolved: bool,
@@ -83,16 +88,48 @@ struct Market {
     description: String,
 }
 
-pub(crate) async fn get_market<T: EnumCount + IntoEnumIterator + Copy>(
+#[derive(sqlx::FromRow, Debug)]
+struct ShareRow {
+    market_id: i64,
+    idx: i64,
+    amount: i64,
+    description: String,
+}
+
+pub(crate) async fn get_market<T: EnumCount + IntoEnumIterator + Copy + Eq>(
     pool: &SqlitePool,
     market_id: i64,
 ) -> Option<FullLmsrMarket<T>> {
-    let result: Option<Market> = sqlx::query_as("SELECT * FROM lmsr_markets WHERE id = ?")
+    let result: MarketRow = sqlx::query_as("SELECT * FROM lmsr_markets WHERE id = ?")
         .bind(market_id)
         .fetch_optional(pool)
         .await
+        .unwrap()?;
+
+    let shares: Vec<ShareRow> = sqlx::query_as("SELECT * FROM shares WHERE market_id = ?")
+        .bind(market_id)
+        .fetch_all(pool)
+        .await
         .unwrap();
-    None
+
+    let resolved = match result.resolved_idx {
+        Some(i) => T::iter().nth(i as usize),
+        None => None,
+    };
+
+    let market: LmsrMarket<T> = LmsrMarketDTO {
+        shares: shares.iter().map(|share| share.amount as u64).collect(),
+        liquidity: result.liquidity,
+        resolved,
+        market_volume: result.market_volume,
+    }
+    .into();
+
+    Some(FullLmsrMarket {
+        market,
+        title: result.title,
+        description: result.description,
+    })
 }
 
 #[tokio::main]
@@ -116,7 +153,14 @@ async fn main() {
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![commands::help(), commands::points(), commands::new_market()],
+            commands: vec![
+                commands::help(),
+                commands::points(),
+                commands::new_market(),
+                commands::markets(),
+                commands::market(),
+                commands::buy(),
+            ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("!".into()),
                 ..Default::default()

@@ -15,7 +15,7 @@ CREATE TABLE shares (
     amount INTEGER NOT NULL DEFAULT 0,
     description TEXT NOT NULL,
     PRIMARY KEY(market_id, idx),
-    FOREIGN KEY(market_id) REFERENCES lmsr_market(id) ON DELETE CASCADE
+    FOREIGN KEY(market_id) REFERENCES lmsr_markets(id) ON DELETE CASCADE
 );
 
 CREATE TABLE users (
@@ -31,5 +31,5 @@ CREATE TABLE user_owns (
     amount INTEGER NOT NULL,
     PRIMARY KEY(user_id, market_id, share_idx),
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY(market_id) REFERENCES lmsr_market(id) ON DELETE CASCADE
+    FOREIGN KEY(market_id) REFERENCES lmsr_markets(id) ON DELETE CASCADE
 );
