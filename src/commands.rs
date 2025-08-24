@@ -127,15 +127,29 @@ pub async fn market(
     embed.title = Some(market.title);
     embed.description = Some(market.description);
 
+    let yes_price = market
+        .market
+        .price(BinaryOutcome::Yes)
+        .unwrap_or(f64::INFINITY)
+        * 100.0;
+    let no_price = market
+        .market
+        .price(BinaryOutcome::No)
+        .unwrap_or(f64::INFINITY)
+        * 100.0;
+
+    let dto = market.market.serialize();
+
     let yes_field = EmbedField::new(
         "Yes",
         format!(
-            "Current price: {:.2}",
-            market
-                .market
-                .price(BinaryOutcome::Yes)
-                .unwrap_or(f64::INFINITY)
-                * 100.0
+            "Current price: {:.2} ({} shares)",
+            yes_price,
+            dto.shares
+                .get(LmsrMarket::<BinaryOutcome>::outcome_index(
+                    BinaryOutcome::Yes
+                ))
+                .unwrap_or(&0)
         ),
         false,
     );
@@ -143,12 +157,13 @@ pub async fn market(
     let no_field = EmbedField::new(
         "No",
         format!(
-            "Current price: {:.2}",
-            market
-                .market
-                .price(BinaryOutcome::No)
-                .unwrap_or(f64::INFINITY)
-                * 100.0
+            "Current price: {:.2} ({} shares)",
+            no_price,
+            dto.shares
+                .get(LmsrMarket::<BinaryOutcome>::outcome_index(
+                    BinaryOutcome::No
+                ))
+                .unwrap_or(&0)
         ),
         false,
     );
@@ -284,7 +299,8 @@ pub async fn sell(
     .bind(idx as i64)
     .fetch_optional(&ctx.data().pool)
     .await
-    .unwrap() {
+    .unwrap()
+    {
         Some(u) => u,
         None => {
             ctx.say("You don't own any shares").await?;
@@ -293,7 +309,8 @@ pub async fn sell(
     };
 
     if user_owns.amount < amount as i64 {
-        ctx.say(format!("You only own {} shares", user_owns.amount)).await?;
+        ctx.say(format!("You only own {} shares", user_owns.amount))
+            .await?;
         return Ok(());
     }
 
@@ -330,7 +347,7 @@ pub async fn sell(
         .execute(&ctx.data().pool)
         .await?;
 
-  sqlx::query("UPDATE shares SET amount = ? WHERE market_id = ? AND idx = ?")
+    sqlx::query("UPDATE shares SET amount = ? WHERE market_id = ? AND idx = ?")
         .bind(*dto.shares.get(idx).unwrap() as i64)
         .bind(id)
         .bind(idx as i64)
@@ -343,7 +360,8 @@ pub async fn sell(
         .execute(&ctx.data().pool)
         .await?;
 
-    ctx.say(format!("Sold {} shares for {:.2}", amount, price * 100.0)).await?;
+    ctx.say(format!("Sold {} shares for {:.2}", amount, price * 100.0))
+        .await?;
 
     Ok(())
 }
