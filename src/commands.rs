@@ -108,7 +108,7 @@ pub async fn markets(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Get information about the market `id`. Prices are a bit cap, I'm too lazy to calculate them correctly
+/// Get information about the market `id`. Prices are a bit cap, too lazy to calculate them correctly
 #[poise::command(slash_command, prefix_command)]
 pub async fn market(
     ctx: Context<'_>,
