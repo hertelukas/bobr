@@ -23,6 +23,7 @@ pub async fn help(
     Ok(())
 }
 
+/// Get your own points
 #[poise::command(slash_command, prefix_command)]
 pub async fn points(ctx: Context<'_>) -> Result<(), Error> {
     let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE id = ?")
@@ -44,6 +45,7 @@ pub async fn points(ctx: Context<'_>) -> Result<(), Error> {
 
 const DEFAULT_LIQUIDITY: f64 = 10.0;
 
+/// Create a new market
 #[poise::command(slash_command, prefix_command)]
 pub async fn new_market(ctx: Context<'_>, title: String, description: String) -> Result<(), Error> {
     let result =
@@ -78,6 +80,7 @@ pub async fn new_market(ctx: Context<'_>, title: String, description: String) ->
     Ok(())
 }
 
+/// List all unresolved markets
 #[poise::command(slash_command, prefix_command)]
 pub async fn markets(ctx: Context<'_>) -> Result<(), Error> {
     let result: Vec<MarketRow> = sqlx::query_as("SELECT * FROM lmsr_markets")
@@ -105,6 +108,7 @@ pub async fn markets(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Get information about the market `id`. Prices are a bit cap, I'm too lazy to calculate them correctly
 #[poise::command(slash_command, prefix_command)]
 pub async fn market(
     ctx: Context<'_>,
@@ -155,6 +159,7 @@ pub async fn market(
     Ok(())
 }
 
+/// Buy shares on a market
 #[poise::command(slash_command, prefix_command)]
 pub async fn buy(
     ctx: Context<'_>,
@@ -260,6 +265,7 @@ pub async fn buy(
     Ok(())
 }
 
+/// Sell shares on a market
 #[poise::command(slash_command, prefix_command)]
 pub async fn sell(
     ctx: Context<'_>,
