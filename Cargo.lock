@@ -1406,7 +1406,7 @@ dependencies = [
 [[package]]
 name = "prediction-market"
 version = "0.1.0"
-source = "git+https://github.com/hertelukas/prediction-markets.git#611e383c03b8f8bab53e200ce8249b39ede7d2ab"
+source = "git+https://github.com/hertelukas/prediction-markets.git#2b916dc678084a98ce24519d47adc68e925fbf21"
 dependencies = [
  "strum",
 ]

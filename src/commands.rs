@@ -185,11 +185,7 @@ pub async fn buy(
         }
     };
 
-    let outcome = if option {
-        BinaryOutcome::Yes
-    } else {
-        BinaryOutcome::No
-    };
+    let outcome: BinaryOutcome = option.into();
 
     let price = match market.market.buy(outcome, amount) {
         Ok(price) => price,
@@ -212,8 +208,7 @@ pub async fn buy(
         .bind(dto.market_volume)
         .bind(id)
         .execute(&ctx.data().pool)
-        .await
-        .unwrap();
+        .await?;
 
     let idx: usize = LmsrMarket::<BinaryOutcome>::outcome_index(outcome);
 
@@ -222,15 +217,13 @@ pub async fn buy(
         .bind(id)
         .bind(idx as i64)
         .execute(&ctx.data().pool)
-        .await
-        .unwrap();
+        .await?;
 
     sqlx::query("UPDATE users SET points = ? WHERE id = ?")
         .bind(user.points - price)
         .bind(user.id)
         .execute(&ctx.data().pool)
-        .await
-        .unwrap();
+        .await?;
 
     ctx.say(format!("Bougt {amount} shares for {:.2}", price * 100.0))
         .await?;
@@ -242,8 +235,7 @@ pub async fn buy(
     .bind(id)
     .bind(idx as i64)
     .fetch_optional(&ctx.data().pool)
-    .await
-    .unwrap();
+    .await?;
 
     if user_owns.is_some() {
         sqlx::query("UPDATE user_owns SET amount = amount + ? WHERE user_id = ? AND market_id = ? AND share_idx = ?")
@@ -252,7 +244,7 @@ pub async fn buy(
             .bind(id)
             .bind(idx as i64)
             .execute(&ctx.data().pool)
-            .await.unwrap();
+            .await?;
     } else {
         sqlx::query(
             "INSERT INTO user_owns (user_id, market_id, share_idx, amount) VALUES (?, ?, ?, ?)",
@@ -262,9 +254,90 @@ pub async fn buy(
         .bind(idx as i64)
         .bind(amount as i64)
         .execute(&ctx.data().pool)
-        .await
-        .unwrap();
+        .await?;
     }
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn sell(
+    ctx: Context<'_>,
+    #[description = "Market ID (search with !markets)"] id: i64,
+    #[description = "Yes or No option to sell"] option: bool,
+    #[description = "Amount of shares"] amount: u64,
+) -> Result<(), Error> {
+    let outcome: BinaryOutcome = option.into();
+    let idx: usize = LmsrMarket::<BinaryOutcome>::outcome_index(outcome);
+
+    let user_owns: UserOwns = match sqlx::query_as(
+        "SELECT * FROM user_owns WHERE user_id = ? AND market_id = ? AND share_idx = ?",
+    )
+    .bind(ctx.author().id.get() as i64)
+    .bind(id)
+    .bind(idx as i64)
+    .fetch_optional(&ctx.data().pool)
+    .await
+    .unwrap() {
+        Some(u) => u,
+        None => {
+            ctx.say("You don't own any shares").await?;
+            return Ok(());
+        }
+    };
+
+    if user_owns.amount < amount as i64 {
+        ctx.say(format!("You only own {} shares", user_owns.amount)).await?;
+        return Ok(());
+    }
+
+    let mut market: FullLmsrMarket<BinaryOutcome> = match get_market(&ctx.data().pool, id).await {
+        Some(m) => m,
+        None => {
+            ctx.say(format!("Market with id {id} could not be found"))
+                .await?;
+            return Ok(());
+        }
+    };
+
+    let price = match market.market.sell(outcome, amount) {
+        Ok(price) => price,
+        Err(e) => {
+            ctx.say(format!("Could not sell shares: {e:?} ")).await?;
+            return Ok(());
+        }
+    };
+
+    sqlx::query("UPDATE user_owns SET amount = amount - ? WHERE user_id = ? AND market_id = ? AND share_idx = ?")
+        .bind(amount as i64)
+        .bind(ctx.author().id.get() as i64)
+        .bind(id)
+        .bind(idx as i64)
+        .execute(&ctx.data().pool)
+        .await?;
+
+    let dto = market.market.serialize();
+
+    sqlx::query("UPDATE lmsr_markets SET market_volume = ? WHERE id = ?")
+        .bind(dto.market_volume)
+        .bind(id)
+        .execute(&ctx.data().pool)
+        .await?;
+
+  sqlx::query("UPDATE shares SET amount = ? WHERE market_id = ? AND idx = ?")
+        .bind(*dto.shares.get(idx).unwrap() as i64)
+        .bind(id)
+        .bind(idx as i64)
+        .execute(&ctx.data().pool)
+        .await?;
+
+    sqlx::query("UPDATE users SET points = points + ? WHERE id = ?")
+        .bind(price)
+        .bind(ctx.author().id.get() as i64)
+        .execute(&ctx.data().pool)
+        .await?;
+
+    ctx.say(format!("Sold {} shares for {:.2}", amount, price * 100.0)).await?;
 
     Ok(())
 }

@@ -136,10 +136,11 @@ pub(crate) async fn get_market<T: EnumCount + IntoEnumIterator + Copy + Eq>(
 async fn main() {
     dotenvy::dotenv().expect(".env file not found");
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let connection = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
-        .connect("sqlite::memory:")
+        .connect(&connection)
         .await
         .expect("could not connect to database");
     let event_pool = pool.clone();
@@ -160,6 +161,7 @@ async fn main() {
                 commands::markets(),
                 commands::market(),
                 commands::buy(),
+                commands::sell(),
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("!".into()),
