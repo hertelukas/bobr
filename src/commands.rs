@@ -397,13 +397,14 @@ pub async fn portfolio(
         .await?;
 
     let mut embed = Embed::default();
-    embed.title = Some(user.username);
 
+    let mut total_shares = 0;
+    let mut total_value = 0.0;
     for own in user_owns {
         if own.amount == 0 {
             continue;
         }
-        let market: FullLmsrMarket<BinaryOutcome> =
+        let mut market: FullLmsrMarket<BinaryOutcome> =
             match get_market(&ctx.data().pool, own.market_id).await {
                 Some(m) => m,
                 None => continue,
@@ -412,12 +413,28 @@ pub async fn portfolio(
             Some(o) => o,
             None => continue,
         };
+        total_shares += own.amount;
+        total_value += market.market.sell(option, own.amount as u64).unwrap_or(0.0);
         embed.fields.push(EmbedField::new(
             format!("{} ({:?})", market.title, option),
             format!("{}", own.amount),
             false,
         ));
     }
+
+    embed.title = Some(format!(
+        "{} ({:.2})",
+        user.username.clone(),
+        (total_value + user.points) * 100.0
+    ));
+
+    embed.description = Some(format!(
+        "{} owns {} shares, with a total value of {:.2} and owns {:.2} points",
+        user.username,
+        total_shares,
+        total_value * 100.0,
+        user.points * 100.0
+    ));
 
     ctx.send(poise::CreateReply::default().embed(embed.into()))
         .await?;
