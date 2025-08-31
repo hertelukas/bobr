@@ -414,10 +414,11 @@ pub async fn portfolio(
             None => continue,
         };
         total_shares += own.amount;
-        total_value += market.market.sell(option, own.amount as u64).unwrap_or(0.0);
+        let value = market.market.sell(option, own.amount as u64).unwrap_or(0.0);
+        total_value += value;
         embed.fields.push(EmbedField::new(
             format!("{} ({:?})", market.title, option),
-            format!("{}", own.amount),
+            format!("{} ({:.2})", own.amount, value * 100.0),
             false,
         ));
     }
