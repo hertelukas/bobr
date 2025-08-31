@@ -1,7 +1,8 @@
 use core::f64;
 
-use poise::serenity_prelude::{Embed, EmbedField};
+use poise::serenity_prelude::{self, Embed, EmbedField};
 use prediction_market::{BinaryOutcome, LmsrMarket, Market};
+use strum::IntoEnumIterator;
 
 use crate::{Context, Error, FullLmsrMarket, MarketRow, User, UserOwns, get_market};
 
@@ -46,7 +47,7 @@ pub async fn points(ctx: Context<'_>) -> Result<(), Error> {
 const DEFAULT_LIQUIDITY: f64 = 10.0;
 
 /// Create a new market
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command)]
 pub async fn new_market(ctx: Context<'_>, title: String, description: String) -> Result<(), Error> {
     let result =
         sqlx::query("INSERT INTO lmsr_markets (liquidity, title, description) VALUES (?, ?, ?)")
@@ -245,7 +246,7 @@ pub async fn buy(
         .execute(&ctx.data().pool)
         .await?;
 
-    ctx.say(format!("Bougt {amount} shares for {:.2}", price * 100.0))
+    ctx.say(format!("Bought {amount} shares for {:.2}", price * 100.0))
         .await?;
 
     let user_owns: Option<UserOwns> = sqlx::query_as(
@@ -361,6 +362,60 @@ pub async fn sell(
         .await?;
 
     ctx.say(format!("Sold {} shares for {:.2}", amount, price * 100.0))
+        .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn portfolio(
+    ctx: Context<'_>,
+    #[description = "User to show portfolio of"] of: Option<serenity_prelude::Member>,
+) -> Result<(), Error> {
+    let id = match of {
+        Some(m) => m.user.id.get() as i64,
+        None => ctx.author().id.get() as i64,
+    };
+
+    let user: User = match sqlx::query_as("SELECT * FROM users WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&ctx.data().pool)
+        .await
+        .unwrap()
+    {
+        Some(u) => u,
+        None => {
+            ctx.say("Unknown user.").await?;
+            return Ok(());
+        }
+    };
+
+    let user_owns: Vec<UserOwns> = sqlx::query_as("SELECT * FROM user_owns WHERE user_id = ?")
+        .bind(id)
+        .fetch_all(&ctx.data().pool)
+        .await?;
+
+    let mut embed = Embed::default();
+    embed.title = Some(user.username);
+
+    for own in user_owns {
+        let market: FullLmsrMarket<BinaryOutcome> =
+            match get_market(&ctx.data().pool, own.market_id).await {
+                Some(m) => m,
+                None => continue,
+            };
+        let option = match BinaryOutcome::iter().nth(own.share_idx as usize) {
+            Some(o) => o,
+            None => continue,
+        };
+        embed.fields.push(EmbedField::new(
+            format!("{} ({:?})", market.title, option),
+            format!("{}", own.amount),
+            false,
+        ));
+    }
+
+    ctx.send(poise::CreateReply::default().embed(embed.into()))
         .await?;
 
     Ok(())

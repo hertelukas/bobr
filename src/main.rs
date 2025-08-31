@@ -162,6 +162,7 @@ async fn main() {
                 commands::market(),
                 commands::buy(),
                 commands::sell(),
+                commands::portfolio(),
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("!".into()),
