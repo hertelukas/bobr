@@ -367,6 +367,7 @@ pub async fn sell(
     Ok(())
 }
 
+/// Show the portfolio of a user
 #[poise::command(slash_command, prefix_command)]
 pub async fn portfolio(
     ctx: Context<'_>,
@@ -399,6 +400,9 @@ pub async fn portfolio(
     embed.title = Some(user.username);
 
     for own in user_owns {
+        if own.amount == 0 {
+            continue;
+        }
         let market: FullLmsrMarket<BinaryOutcome> =
             match get_market(&ctx.data().pool, own.market_id).await {
                 Some(m) => m,
