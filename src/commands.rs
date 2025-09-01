@@ -571,3 +571,178 @@ pub async fn buy_stock(
 
     Ok(())
 }
+
+/// View your stock portfolio
+#[poise::command(slash_command, prefix_command)]
+pub async fn stock_portfolio(
+    ctx: Context<'_>,
+    #[description = "User to show stock portfolio of"] of: Option<serenity_prelude::Member>,
+) -> Result<(), Error> {
+    let id = match of {
+        Some(m) => m.user.id.get() as i64,
+        None => ctx.author().id.get() as i64,
+    };
+
+    let user: User = match sqlx::query_as("SELECT * FROM users WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&ctx.data().pool)
+        .await
+        .unwrap()
+    {
+        Some(u) => u,
+        None => {
+            ctx.say("Unknown user.").await?;
+            return Ok(());
+        }
+    };
+
+    let user_stocks: Vec<UserStocks> = sqlx::query_as("SELECT * FROM user_stocks WHERE user_id = ?")
+        .bind(id)
+        .fetch_all(&ctx.data().pool)
+        .await?;
+
+    if user_stocks.is_empty() {
+        ctx.say(format!("{} doesn't own any stocks yet.", user.username))
+            .await?;
+        return Ok(());
+    }
+
+    let mut embed = Embed::default();
+    embed.title = Some(format!("{}'s Stock Portfolio", user.username));
+
+    let mut total_value = 0.0;
+
+    for stock in user_stocks {
+        if stock.shares == 0 {
+            continue;
+        }
+
+        // Fetch current price from Finnhub
+        let url = format!(
+            "https://finnhub.io/api/v1/quote?symbol={}&token={}",
+            stock.stock_symbol, ctx.data().finnhub_api_key
+        );
+
+        let current_price = match ctx.data().http_client.get(&url).send().await {
+            Ok(resp) => {
+                match resp.json::<FinnhubQuote>().await {
+                    Ok(quote) => quote.c,
+                    Err(_) => 0.0,
+                }
+            },
+            Err(_) => 0.0,
+        };
+
+        let current_value = current_price * stock.shares as f64;
+        let cost_basis = stock.avg_price * stock.shares as f64 * 100.0; // Convert back to USD
+        let profit_loss = current_value - cost_basis;
+        let profit_loss_pct = if cost_basis > 0.0 {
+            (profit_loss / cost_basis) * 100.0
+        } else {
+            0.0
+        };
+
+        total_value += current_value;
+
+        let profit_emoji = if profit_loss >= 0.0 { "📈" } else { "📉" };
+
+        embed.fields.push(EmbedField::new(
+            format!("{} {} shares", stock.stock_symbol, stock.shares),
+            format!(
+                "Current: ${:.2}\nAvg Cost: ${:.2}\nP&L: {}{:.2} ({}{:.1}%)",
+                current_price,
+                stock.avg_price * 100.0,
+                profit_emoji,
+                profit_loss,
+                if profit_loss >= 0.0 { "+" } else { "" },
+                profit_loss_pct
+            ),
+            true,
+        ));
+    }
+
+    embed.description = Some(format!(
+        "Total Portfolio Value: ${:.2}\nCash: ${:.2}\nTotal Net Worth: ${:.2}",
+        total_value,
+        user.points * 100.0,
+        total_value + (user.points * 100.0)
+    ));
+
+    ctx.send(poise::CreateReply::default().embed(embed.into()))
+        .await?;
+
+    Ok(())
+}
+
+/// Get current stock price from Finnhub
+#[poise::command(slash_command, prefix_command)]
+pub async fn stock_price(
+    ctx: Context<'_>,
+    #[description = "Stock symbol (e.g. AAPL, TSLA)"] symbol: String,
+) -> Result<(), Error> {
+    let symbol_upper = symbol.to_uppercase();
+    
+    // Fetch stock price from Finnhub API
+    let url = format!(
+        "https://finnhub.io/api/v1/quote?symbol={}&token={}",
+        symbol_upper, ctx.data().finnhub_api_key
+    );
+
+    let response = ctx.data().http_client.get(&url).send().await;
+    
+    let quote: FinnhubQuote = match response {
+        Ok(resp) => {
+            match resp.json().await {
+                Ok(q) => q,
+                Err(_) => {
+                    ctx.say("Failed to parse stock data. Please check the symbol.").await?;
+                    return Ok(());
+                }
+            }
+        },
+        Err(_) => {
+            ctx.say("Failed to fetch stock data. Please try again later.").await?;
+            return Ok(());
+        }
+    };
+
+    // Check if the stock price is valid
+    if quote.c <= 0.0 {
+        ctx.say(format!("Invalid stock symbol: {}", symbol_upper)).await?;
+        return Ok(());
+    }
+
+    let change = quote.c - quote.pc;
+    let change_pct = if quote.pc > 0.0 {
+        (change / quote.pc) * 100.0
+    } else {
+        0.0
+    };
+
+    let change_emoji = if change >= 0.0 { "📈" } else { "📉" };
+
+    let mut embed = Embed::default();
+    embed.title = Some(format!("{} Stock Price", symbol_upper));
+    embed.description = Some(format!(
+        "**Current Price:** ${:.2}\n\
+        **Previous Close:** ${:.2}\n\
+        **Change:** {}{:.2} ({}{:.2}%)\n\
+        **Day High:** ${:.2}\n\
+        **Day Low:** ${:.2}\n\
+        **Day Open:** ${:.2}",
+        quote.c,
+        quote.pc,
+        change_emoji,
+        change,
+        if change >= 0.0 { "+" } else { "" },
+        change_pct,
+        quote.h,
+        quote.l,
+        quote.o
+    ));
+
+    ctx.send(poise::CreateReply::default().embed(embed.into()))
+        .await?;
+
+    Ok(())
+}
