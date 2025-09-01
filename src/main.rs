@@ -7,6 +7,8 @@ use strum::{EnumCount, IntoEnumIterator};
 // User data, which is stored and accessible in all command invocations
 struct Data {
     pool: SqlitePool,
+    http_client: reqwest::Client,
+    finnhub_api_key: String,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -69,6 +71,14 @@ pub(crate) struct UserOwns {
     market_id: i64,
     share_idx: i64,
     amount: i64,
+}
+
+#[derive(sqlx::FromRow)]
+pub(crate) struct UserStocks {
+    user_id: i64,
+    stock_symbol: String,
+    shares: i64,
+    avg_price: f64,
 }
 
 pub(crate) struct FullLmsrMarket<T: EnumCount + IntoEnumIterator + Copy + Eq> {
@@ -137,6 +147,7 @@ async fn main() {
     dotenvy::dotenv().expect(".env file not found");
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let connection = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
+    let finnhub_api_key = std::env::var("FINNHUB_API_KEY").expect("missing FINNHUB_API_KEY");
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
@@ -144,6 +155,8 @@ async fn main() {
         .await
         .expect("could not connect to database");
     let event_pool = pool.clone();
+
+    let http_client = reqwest::Client::new();
 
     sqlx::migrate!()
         .run(&pool)
@@ -163,6 +176,7 @@ async fn main() {
                 commands::buy(),
                 commands::sell(),
                 commands::portfolio(),
+                commands::buy_stock(),
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("!".into()),
@@ -173,7 +187,11 @@ async fn main() {
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data { pool })
+                Ok(Data { 
+                    pool,
+                    http_client,
+                    finnhub_api_key,
+                })
             })
         })
         .build();

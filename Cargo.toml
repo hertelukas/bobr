@@ -10,3 +10,5 @@ sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio"] }
 tokio = { version = "1.47.0", features = ["full"] }
 prediction-market = { git = "https://github.com/hertelukas/prediction-markets.git"}
 strum = "0.27.2"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
